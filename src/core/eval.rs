@@ -1,8 +1,14 @@
 use std::{io::Write, net::TcpStream};
 
-use crate::core::{cmd::RedisCommand, resp::{Value, encode}};
+use crate::core::{
+    cmd::RedisCommand,
+    resp::{Value, encode},
+};
 
-pub fn eval_and_respond(cmd: &RedisCommand, client_stream: &mut TcpStream) -> Result<(), std::io::Error> {
+pub fn eval_and_respond(
+    cmd: &RedisCommand,
+    client_stream: &mut TcpStream,
+) -> Result<(), std::io::Error> {
     match cmd.cmd.as_str() {
         "PING" => eval_ping(&cmd.args, client_stream),
         "ECHO" => Ok(()),
