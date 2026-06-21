@@ -1,5 +1,5 @@
-use std::io::{Error, ErrorKind};
 use std::fmt;
+use std::io::{Error, ErrorKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -10,7 +10,6 @@ pub enum Value {
     Array(Vec<Value>),
     Null,
 }
-
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -35,7 +34,9 @@ pub fn decode(data: &[u8]) -> Result<Value, Error> {
     if data.is_empty() {
         return Err(Error::new(ErrorKind::InvalidData, "Empty data"));
     }
-    decode_one(data).map(|(value, _)| value).map_err(|e| Error::new(ErrorKind::InvalidData, e))
+    decode_one(data)
+        .map(|(value, _)| value)
+        .map_err(|e| Error::new(ErrorKind::InvalidData, e))
 }
 
 fn decode_one(data: &[u8]) -> Result<(Value, usize), Error> {
@@ -61,7 +62,10 @@ fn decode_simple_string(data: &[u8]) -> Result<(Value, usize), Error> {
     if pos >= data.len() {
         return Err(Error::new(ErrorKind::InvalidData, "Invalid data"));
     }
-    Ok((Value::SimpleString(String::from_utf8_lossy(&data[1..pos]).to_string()), pos + 2))
+    Ok((
+        Value::SimpleString(String::from_utf8_lossy(&data[1..pos]).to_string()),
+        pos + 2,
+    ))
 }
 
 fn decode_error(data: &[u8]) -> Result<(Value, usize), Error> {
@@ -98,7 +102,6 @@ fn decode_array(data: &[u8]) -> Result<(Value, usize), Error> {
     pos += delta;
     let mut values: Vec<Value> = Vec::with_capacity(len);
     for _ in 0..len {
-        
         let (value, delta) = decode_one(&data[pos..])?;
         values.push(value);
         pos += delta;
@@ -160,9 +163,9 @@ pub fn encode(value: &Value) -> Result<Vec<u8>, Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap};
+    use std::collections::HashMap;
 
-use super::*;
+    use super::*;
 
     #[test]
     fn test_decode_simple_string() {
@@ -171,8 +174,14 @@ use super::*;
         map.insert("+OK\r\n", Value::SimpleString("OK".to_string()));
         map.insert("+Hello\r\n", Value::SimpleString("Hello".to_string()));
         map.insert("+World\r\n", Value::SimpleString("World".to_string()));
-        map.insert("+Hello World\r\n", Value::SimpleString("Hello World".to_string()));
-        map.insert("+Hello World\r\n", Value::SimpleString("Hello World".to_string()));
+        map.insert(
+            "+Hello World\r\n",
+            Value::SimpleString("Hello World".to_string()),
+        );
+        map.insert(
+            "+Hello World\r\n",
+            Value::SimpleString("Hello World".to_string()),
+        );
 
         for (data, expected_value) in map {
             let (value, bytes_read) = decode_simple_string(data.as_bytes()).unwrap();
@@ -185,13 +194,16 @@ use super::*;
     fn test_decode_error() {
         println!("test_decode_error");
         let mut map: HashMap<&str, Value> = HashMap::new();
-        map.insert("-ERR error message\r\n", Value::Error("ERR error message".to_string()));
+        map.insert(
+            "-ERR error message\r\n",
+            Value::Error("ERR error message".to_string()),
+        );
         map.insert("-Error\r\n", Value::Error("Error".to_string()));
         map.insert("-World\r\n", Value::Error("World".to_string()));
         map.insert("-Hello World\r\n", Value::Error("Hello World".to_string()));
         map.insert("-Hello World\r\n", Value::Error("Hello World".to_string()));
 
-        for (data, expected_value) in map { 
+        for (data, expected_value) in map {
             let (value, bytes_read) = decode_error(data.as_bytes()).unwrap();
             println!("value: {:?}, bytes_read: {}", value, bytes_read);
             assert_eq!(value, expected_value);
@@ -221,9 +233,18 @@ use super::*;
     fn test_decode_bulk_string() {
         println!("test_decode_bulk_string");
         let mut map: HashMap<&str, Value> = HashMap::new();
-        map.insert("$5\r\nHello\r\n", Value::BulkString("Hello".as_bytes().to_vec()));
-        map.insert("$5\r\nWorld\r\n", Value::BulkString("World".as_bytes().to_vec()));
-        map.insert("$11\r\nHello World\r\n", Value::BulkString("Hello World".as_bytes().to_vec()));
+        map.insert(
+            "$5\r\nHello\r\n",
+            Value::BulkString("Hello".as_bytes().to_vec()),
+        );
+        map.insert(
+            "$5\r\nWorld\r\n",
+            Value::BulkString("World".as_bytes().to_vec()),
+        );
+        map.insert(
+            "$11\r\nHello World\r\n",
+            Value::BulkString("Hello World".as_bytes().to_vec()),
+        );
         map.insert("$0\r\n\r\n", Value::BulkString(Vec::new()));
         for (data, expected_value) in map {
             let (value, bytes_read) = decode_bulk_string(data.as_bytes()).unwrap();
@@ -237,9 +258,25 @@ use super::*;
         println!("test_decode_array");
         let mut map: HashMap<&str, Value> = HashMap::new();
         map.insert("*0\r\n", Value::Array(Vec::new()));
-        map.insert("*1\r\n$5\r\nHello\r\n", Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec())]));
-        map.insert("*2\r\n$5\r\nHello\r\n$5\r\nWorld\r\n", Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec()), Value::BulkString("World".as_bytes().to_vec())]));
-        map.insert("*3\r\n$5\r\nHello\r\n$5\r\nWorld\r\n$11\r\nHello World\r\n", Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec()), Value::BulkString("World".as_bytes().to_vec()), Value::BulkString("Hello World".as_bytes().to_vec())]));
+        map.insert(
+            "*1\r\n$5\r\nHello\r\n",
+            Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec())]),
+        );
+        map.insert(
+            "*2\r\n$5\r\nHello\r\n$5\r\nWorld\r\n",
+            Value::Array(vec![
+                Value::BulkString("Hello".as_bytes().to_vec()),
+                Value::BulkString("World".as_bytes().to_vec()),
+            ]),
+        );
+        map.insert(
+            "*3\r\n$5\r\nHello\r\n$5\r\nWorld\r\n$11\r\nHello World\r\n",
+            Value::Array(vec![
+                Value::BulkString("Hello".as_bytes().to_vec()),
+                Value::BulkString("World".as_bytes().to_vec()),
+                Value::BulkString("Hello World".as_bytes().to_vec()),
+            ]),
+        );
 
         for (data, expected_value) in map {
             let (value, bytes_read) = decode_array(data.as_bytes()).unwrap();
@@ -253,13 +290,35 @@ use super::*;
         println!("test_decode");
         let mut map: HashMap<&str, Value> = HashMap::new();
         map.insert("+OK\r\n", Value::SimpleString("OK".to_string()));
-        map.insert("-ERR error message\r\n", Value::Error("ERR error message".to_string()));
+        map.insert(
+            "-ERR error message\r\n",
+            Value::Error("ERR error message".to_string()),
+        );
         map.insert(":123\r\n", Value::Integer(123));
-        map.insert("$5\r\nHello\r\n", Value::BulkString("Hello".as_bytes().to_vec()));
+        map.insert(
+            "$5\r\nHello\r\n",
+            Value::BulkString("Hello".as_bytes().to_vec()),
+        );
         map.insert("*0\r\n", Value::Array(Vec::new()));
-        map.insert("*1\r\n$5\r\nHello\r\n", Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec())]));
-        map.insert("*2\r\n$5\r\nHello\r\n$5\r\nWorld\r\n", Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec()), Value::BulkString("World".as_bytes().to_vec())]));
-        map.insert("*3\r\n$5\r\nHello\r\n$5\r\nWorld\r\n$11\r\nHello World\r\n", Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec()), Value::BulkString("World".as_bytes().to_vec()), Value::BulkString("Hello World".as_bytes().to_vec())]));
+        map.insert(
+            "*1\r\n$5\r\nHello\r\n",
+            Value::Array(vec![Value::BulkString("Hello".as_bytes().to_vec())]),
+        );
+        map.insert(
+            "*2\r\n$5\r\nHello\r\n$5\r\nWorld\r\n",
+            Value::Array(vec![
+                Value::BulkString("Hello".as_bytes().to_vec()),
+                Value::BulkString("World".as_bytes().to_vec()),
+            ]),
+        );
+        map.insert(
+            "*3\r\n$5\r\nHello\r\n$5\r\nWorld\r\n$11\r\nHello World\r\n",
+            Value::Array(vec![
+                Value::BulkString("Hello".as_bytes().to_vec()),
+                Value::BulkString("World".as_bytes().to_vec()),
+                Value::BulkString("Hello World".as_bytes().to_vec()),
+            ]),
+        );
 
         for (data, expected_value) in map {
             let value = decode(data.as_bytes()).unwrap();
@@ -267,6 +326,4 @@ use super::*;
             assert_eq!(value, expected_value);
         }
     }
-
-    
 }

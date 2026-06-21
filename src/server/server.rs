@@ -2,6 +2,7 @@ use crate::config::config::Config;
 use crate::core::cmd::RedisCommand;
 use crate::core::eval::eval_and_respond;
 use crate::core::resp;
+use crate::rk_info;
 use std::io::{ErrorKind, prelude::*};
 use std::net::{TcpListener, TcpStream};
 
@@ -12,16 +13,23 @@ fn read_client_command(client_stream: &mut TcpStream) -> Result<RedisCommand, st
         Err(e) => return Err(e),
     };
     if n == 0 {
-        return Err(std::io::Error::new(ErrorKind::UnexpectedEof, "Client closed connection"));
+        return Err(std::io::Error::new(
+            ErrorKind::UnexpectedEof,
+            "Client closed connection",
+        ));
     }
     let tokens = resp::decode_array_string(&buffer[..n])?;
-    Ok(RedisCommand::new(tokens[0].clone().to_uppercase(), tokens[1..].to_vec()))
+    Ok(RedisCommand::new(
+        tokens[0].clone().to_uppercase(),
+        tokens[1..].to_vec(),
+    ))
 }
 
+#[allow(dead_code)]
 pub fn run_sync_tcp_server() {
     let config: Config = Config::new();
     let mut con_clients: u64 = 0;
-    println!(
+    rk_info!(
         "Server running on {}:{}",
         config.get_host(),
         config.get_port()
@@ -33,7 +41,7 @@ pub fn run_sync_tcp_server() {
         let mut client_stream: TcpStream = match listener.accept() {
             Ok((stream, address)) => {
                 con_clients += 1;
-                println!(
+                rk_info!(
                     "New connection from {}:{}, concurrent connections: {}",
                     address.ip(),
                     address.port(),
@@ -42,7 +50,7 @@ pub fn run_sync_tcp_server() {
                 stream
             }
             Err(e) => {
-                println!("Error accepting connection: {}", e);
+                rk_info!("Error accepting connection: {}", e);
                 break;
             }
         };
@@ -52,20 +60,28 @@ pub fn run_sync_tcp_server() {
                 Err(e) => {
                     con_clients -= 1;
                     if let Err(e) = client_stream.shutdown(std::net::Shutdown::Both) {
-                        println!("Shutdown failed/ignored: {}", e);
+                        rk_info!("Shutdown failed/ignored: {}", e);
                     }
-                    println!("Error reading from client: {}, concurrent connections: {}", e, con_clients);
+                    rk_info!(
+                        "Error reading from client: {}, concurrent connections: {}",
+                        e,
+                        con_clients
+                    );
                     break;
                 }
             };
             match respond_to_client(&cmd, &mut client_stream) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => {
-                    println!("Error responding to client: {}", e);
+                    rk_info!("Error responding to client: {}", e);
                     con_clients -= 1;
                     client_stream.shutdown(std::net::Shutdown::Both).unwrap();
-                    println!("Error responding to client: {}, closed connection, concurrent connections: {}", e, con_clients);
-                    println!("Client closed connection");
+                    rk_info!(
+                        "Error responding to client: {}, closed connection, concurrent connections: {}",
+                        e,
+                        con_clients
+                    );
+                    rk_info!("Client closed connection");
                     break;
                 }
             }
@@ -73,10 +89,12 @@ pub fn run_sync_tcp_server() {
     }
 }
 
-
-fn respond_to_client(cmd: &RedisCommand, client_stream: &mut TcpStream) -> Result<(), std::io::Error> {
+fn respond_to_client(
+    cmd: &RedisCommand,
+    client_stream: &mut TcpStream,
+) -> Result<(), std::io::Error> {
     let response = match eval_and_respond(cmd, client_stream) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             client_stream.write_all(e.to_string().as_bytes()).unwrap();
         }
