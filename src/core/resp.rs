@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Write};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -89,7 +89,7 @@ fn decode_bulk_string(data: &[u8]) -> Result<(Value, usize), Error> {
     let mut pos: usize = 1;
     let (len, delta) = read_len(&data[1..])?;
     pos += delta;
-    if pos + len >= data.len() {
+    if pos + len + 2 > data.len() {
         return Err(Error::new(ErrorKind::InvalidData, "Invalid data"));
     }
     let value = Value::BulkString(data[pos..pos + len].to_vec());
@@ -109,10 +109,18 @@ fn decode_array(data: &[u8]) -> Result<(Value, usize), Error> {
     Ok((Value::Array(values), pos))
 }
 
+fn value_into_string(value: Value) -> String {
+    match value {
+        Value::BulkString(bytes) => String::from_utf8(bytes)
+            .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()),
+        other => other.to_string(),
+    }
+}
+
 pub fn decode_array_string(data: &[u8]) -> Result<Vec<String>, Error> {
     let value = decode(data)?;
     match value {
-        Value::Array(values) => Ok(values.into_iter().map(|v| v.to_string()).collect()),
+        Value::Array(values) => Ok(values.into_iter().map(value_into_string).collect()),
         _ => Err(Error::new(ErrorKind::InvalidData, "Invalid data")),
     }
 }
@@ -132,32 +140,44 @@ fn read_len(data: &[u8]) -> Result<(usize, usize), Error> {
 }
 
 pub fn encode(value: &Value) -> Result<Vec<u8>, Error> {
-    match value {
-        Value::SimpleString(s) => Ok(format!("+{}\r\n", s).into_bytes()),
-        Value::Error(s) => Ok(format!("-{}\r\n", s).into_bytes()),
-        Value::Integer(i) => Ok(format!(":{}\r\n", i).into_bytes()),
-        Value::BulkString(bytes) => {
-            let mut out = Vec::new();
+    let mut out = Vec::new();
+    encode_into(value, &mut out);
+    Ok(out)
+}
 
-            out.extend_from_slice(format!("${}\r\n", bytes.len()).as_bytes());
+fn encode_into(value: &Value, out: &mut Vec<u8>) {
+    match value {
+        Value::SimpleString(s) => {
+            out.push(b'+');
+            out.extend_from_slice(s.as_bytes());
+            out.extend_from_slice(b"\r\n");
+        }
+        Value::Error(s) => {
+            out.push(b'-');
+            out.extend_from_slice(s.as_bytes());
+            out.extend_from_slice(b"\r\n");
+        }
+        Value::Integer(i) => {
+            out.push(b':');
+            write!(out, "{}", i).unwrap();
+            out.extend_from_slice(b"\r\n");
+        }
+        Value::BulkString(bytes) => {
+            out.push(b'$');
+            write!(out, "{}", bytes.len()).unwrap();
+            out.extend_from_slice(b"\r\n");
             out.extend_from_slice(bytes);
             out.extend_from_slice(b"\r\n");
-
-            Ok(out)
         }
         Value::Array(values) => {
-            let mut out = Vec::new();
-
-            out.extend_from_slice(format!("*{}\r\n", values.len()).as_bytes());
-
-            for value in values {
-                let encoded = encode(value)?;
-                out.extend_from_slice(&encoded);
+            out.push(b'*');
+            write!(out, "{}", values.len()).unwrap();
+            out.extend_from_slice(b"\r\n");
+            for v in values {
+                encode_into(v, out);
             }
-
-            Ok(out)
         }
-        Value::Null => Ok(b"$-1\r\n".to_vec()),
+        Value::Null => out.extend_from_slice(b"$-1\r\n"),
     }
 }
 

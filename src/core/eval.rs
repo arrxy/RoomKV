@@ -22,17 +22,17 @@ pub fn eval_and_respond(
 
 fn eval_ping(args: &[String], client_stream: &mut TcpStream) -> Result<(), std::io::Error> {
     if args.len() >= 2 {
-        let buf = format!("ERR wrong number of arguments for 'ping' command");
-        let encoded = encode(&Value::Error(buf))?;
+        let encoded = encode(&Value::Error(
+            "ERR wrong number of arguments for 'ping' command".to_string(),
+        ))?;
         client_stream.write_all(&encoded)?;
         return Ok(());
     }
-    let response;
-    if args.len() == 0 {
-        response = Value::SimpleString("PONG".to_string());
+    let response = if args.is_empty() {
+        Value::SimpleString("PONG".to_string())
     } else {
-        response = Value::BulkString(args[0].clone().into_bytes());
-    }
-    client_stream.write_all(&encode(&response)?).unwrap();
+        Value::BulkString(args[0].clone().into_bytes())
+    };
+    client_stream.write_all(&encode(&response)?)?;
     Ok(())
 }
